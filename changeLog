@@ -1,6 +1,51 @@
 Changelog for GEMC
 ==================
 
+7/14/17
+ - implemented mini-stagger for clas12 dc
+ - LTCC digitization: reading spe and sigma constants from CCDB. Using to produce adc spectrum
+
+7/13/17
+ - removing duplicate instructions in sensitive detector
+
+7/11/17
+ - added culling combo option in the GUI
+ - added button to show 100cm long axes
+
+7/10/17
+ - fixed taggin scheme for smeared info in particle summary bank
+ - better name for general scene: gemcLab
+ - field routine: skipping remaining symmetries after a match is found
+
+7/6/17
+ - fixed timewindow for mirror object, now behaving like flux correctly
+
+6/29/17
+ - fixed beagle format
+ - fixed user info clearing for each particle
+ - added ion definition in BEAGLE format
+
+6/27/17
+ - fixed mirror sensitivity
+
+6/20/17
+ - fixes to the cross-hierarchy between CAD and native
+
+6/19/17
+ - added utilities to scan detectors and cad detectors. This will allow unlimited cross-hierarchy between CAD and native geant4 volumes.
+   The introduced algorithm is a bit ugly. It will be a lot more elegant in gemc 3.0.
+
+6/1/17
+ - initializing hit properly, in case it is an electronic noise hit
+
+5/30/17
+ - moved assignAttribute to mlibrary defs
+
+5/24/17
+ - gui: initialize rect to null
+ - added documentation links for sigmaAlpha
+
+
 5/8/17
  - fixed bug that affected imports of multiple cad systems
 

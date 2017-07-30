@@ -62,7 +62,8 @@ G4VPhysicalVolume* MDetectorConstruction::Construct()
 	(*hallMap)["root"].create_logical_volume(mats, gemcOpt);
 	(*hallMap)["root"].create_physical_volumes(gemcOpt, NULL);
 	hasMagfield((*hallMap)["root"]);
-	
+	(*hallMap)["root"].scanned = 1;
+
 	if(VERB > 3 || catch_v == "root") cout << hd_msg << "    " << (*hallMap)["root"] ;
 	
 	
@@ -76,7 +77,7 @@ G4VPhysicalVolume* MDetectorConstruction::Construct()
 	
 	for(map<string, detector>::iterator i =  hallMap->begin(); i!=hallMap->end(); i++)
 	{
-		if(VERB > 3) cout << hd_msg << " Scanning Detector " << i->first << " - existance: " << i->second.exist << endl;
+		if(VERB > 3) cout << hd_msg << " Native Scanning Detector " << i->first << " - existance: " << i->second.exist << endl;
 		
 		// Find the mother up to "root" - disable kid if ancestor does not exist
 		detector mother = findDetector(i->second.mother);
@@ -104,72 +105,45 @@ G4VPhysicalVolume* MDetectorConstruction::Construct()
 
 			replicants.insert(original);
 		}
-		
 	}
-	
+
 	
 	// ########################################################################
 	// Building Solids, Logical Volumes, Physical Volumes from the detector Map
 	// ########################################################################
-	vector<string> relatives;
 	string mom, kid;
-	
-	vector<string> regions;  // all volumes for which mom is "root"
 
 
 	// CAD imports
+	scanCadDetectors(VERB, catch_v);
+	scanDetectors(VERB, catch_v);
 
-	// building these first in case we want to make copies of these
-	for(auto &dd : *hallMap) {
+	while (nativeRelativesOfCad.size() > 0 || cadRelativesOfNative.size() > 0 || remainingCad.size() > 0 || remainingNative.size() > 0) {
 
 
-		if(dd.second.factory == "CAD") {
+		if(VERB > 10) {
 
-			string thisDetName = dd.first;
+			cout << " native size " << nativeRelativesOfCad.size() << " cad size  " <<  cadRelativesOfNative.size()
+			<<  " remaining cad size "  << remainingCad.size() << " remaining native size "  << remainingNative.size() << endl;
 
-			// filename has been already verified to exist
-			string filename = dd.second.variation;
-			if(VERB > 1)
-				cout << "  > Parsing CAD volume from " << filename << endl;
-
-			CADMesh * mesh = new CADMesh((char *) filename.c_str());
-			mesh->SetScale(mm);
-			mesh->SetReverse(false);
-
-			// solid
-			G4VSolid *cad_solid = mesh->TessellatedMesh();
-
-			// material
-			string materialName = trimSpacesFromString((*hallMap)[thisDetName].material);
-
-			if(mats->find(materialName) == mats->end() ) {
-				G4NistManager* matman = G4NistManager::Instance();
-				if(matman->FindOrBuildMaterial(materialName)) (*mats)[materialName] = matman->FindOrBuildMaterial(materialName);
+			for(auto &c : nativeRelativesOfCad) {
+				cout << " native " << c << endl;
 			}
 
-			// logical
-			G4LogicalVolume *cad_logical = new G4LogicalVolume(cad_solid, (*mats)[materialName],thisDetName, 0, 0, 0);
-			cad_logical->SetVisAttributes((*hallMap)[thisDetName].VAtts);
+			for(auto &c : cadRelativesOfNative) {
+				cout << " cad " << c << endl;
+			}
 
-			// assigning the logical volume to the detector
-			(*hallMap)[thisDetName].SetLogical(cad_logical);
-			isSensitive((*hallMap)[thisDetName]);  // if sensitive, associate sensitive detector
-
-
-			// physical volume
-			// what if mother does not exist?
-
-			// has to be in the same scope, otherwise parser loses all the pointers
-			(*hallMap)[thisDetName].SetPhysical(new G4PVPlacement(&(*hallMap)[thisDetName].rot,
-																  (*hallMap)[thisDetName].pos,
-																  cad_logical,
-																  thisDetName.c_str(),
-																  (*hallMap)["root"].GetLogical(),
-																  false,
-																  0)
-												);
-			
+			for(auto &c : remainingCad) {
+				cout << " remaining cad " << c << endl;
+			}
+			for(auto &c : remainingNative) {
+				cout << " remaining native  "  << c << endl;
+			}
 		}
+
+		scanCadDetectors(VERB, catch_v);
+		scanDetectors(VERB, catch_v);
 	}
 
 	// now build GDML volumes.
@@ -226,7 +200,7 @@ G4VPhysicalVolume* MDetectorConstruction::Construct()
 																		  false,
 																		  0)
 														);
-
+					(*hallMap)[thisDetName].scanned = 1;
 					// cout << " why are these different " << thisDetName << " " << (*hallMap)[thisDetName].GetPhysical() << "  difference  " << dd.second.GetPhysical()  << endl;
 				}
 				delete gdmlWorld;
@@ -235,187 +209,6 @@ G4VPhysicalVolume* MDetectorConstruction::Construct()
 		}
 	}
 
-
-	for( map<string, detector>::iterator i =  hallMap->begin(); i!=hallMap->end(); i++)
-	{
-		// don't build anything if the exist flag is not set
-		if(i->second.exist == 0) continue;
-		
-		// put the first volume in relatives
-		// typically it's the first in alphabetical order
-		if(i->first != "root") relatives.push_back(i->second.name);
-		
-		while(relatives.size() > 0)
-		{
-			detector kid = findDetector(relatives.back());
-			detector mom = findDetector(kid.mother);
-			
-			// if the mother system is different than the kid system
-			// then the kid will define a new region
-			if(mom.system != kid.system && kid.material != "Component")
-				regions.push_back(kid.name);
-
-			
-			// Mom doesn't exists in the hallMap. Stopping everything.
-			if(mom.name != "akasha"  && mom.name == "notfound")
-			{
-				cout << hd_msg << "  Mom was not found for <" << relatives.back() << ">. "
-				     << " We have a No Child Left Behind policy. Exiting. " << endl << endl;
-				exit(0);
-			}
-			
-			// output the Geneaology
-			if(VERB > 3 || kid.name.find(catch_v) != string::npos)
-			{
-				for(unsigned int ir=0; ir<relatives.size()-1; ir++) cout << "\t";
-				cout << hd_msg << " Checking " << kid.name << ", child of " << mom.name
-				               << ", for a living ancestor. "
-				               << " This Geneaology Depth is " << relatives.size() << "." << endl;
-			}
-			
-			// Mom is built, kid not built yet.
-			if(kid.scanned == 0 && mom.scanned == 1)
-			{
-				if(VERB > 3 || kid.name.find(catch_v) != string::npos)
-				{
-					for(unsigned int ir=0; ir<relatives.size()-1; ir++) cout << "\t";
-					cout << hd_msg << "  Found:  " << kid.name
-					     << " is not built yet but its mommie " << mom.name << " is."
-					     << " Building " << kid.name << " of type: "  << kid.type << "..." << endl;
-				}
-				
-				// Check kid dependency on copies
-				if(kid.type.find("CopyOf") == 0)
-				{
-					
-					stringstream ops;
-					string operands(kid.type, 6, kid.type.size());
-					ops << operands;
-					string original;
-					ops >> original;
-					
-					detector dorig = findDetector(original);
-					// if dependency is not built yet, then
-					// add it to the relative list
-					if(dorig.scanned == 0)
-					{
-						relatives.push_back(original);
-						if(VERB > 3  || kid.name.find(catch_v) != string::npos)
-						{
-							for(unsigned int ir=0; ir<relatives.size()-1; ir++) cout << "\t";
-							cout << hd_msg << kid.name << " is copied volume. "
-							<< " Must build: " << original << " first " << endl;
-						}
-					}
-					// otherwise can build the kid
-					else
-					{
-						buildDetector(kid.name);
-						kid.scanned = 1;
-					}
-				}
-				
-				// Check kid dependency on replicas
-				if(kid.type.find("ReplicaOf:") == 0)
-				{
-					
-					stringstream ops;
-					string operands(kid.type, 10, kid.type.size());
-					ops << operands;
-					string original;
-					ops >> original;
-					
-					detector dorig = findDetector(original);
-					// if dependency is not built yet, then
-					// add it to the relative list
-					if(dorig.scanned == 0)
-					{
-						relatives.push_back(trimSpacesFromString(original));
-						
-						if(VERB > 3  || kid.name.find(catch_v) != string::npos)
-						{
-							for(unsigned int ir=0; ir<relatives.size()-1; ir++) cout << "\t";
-							cout << hd_msg << kid.name << " is a replica volume of  " << original
-							<< ". Must build: " << original << " first " << endl;
-						}
-					}
-					// otherwise can build the kid
-					else
-					{
-						buildDetector(kid.name);
-						kid.scanned = 1;
-					}
-				}
-				
-				
-				
-				// Check kid dependency on operations
-				else if(kid.type.find("Operation:") == 0)
-				{
-					int sstart = 10;
-					if(kid.type.find("Operation:~") == 0 || kid.type.find("Operation:@") == 0 ) sstart = 11;
-					
-					string operation(kid.type, sstart, kid.type.size());
-					vector<string> operands = getStringVectorFromString(replaceCharInStringWithChars(operation, "-+*/", " "));
-					string firstop  = operands[0];
-					string secondop = operands[1];
-					
-					// if dependency is not built yet, then
-					// add it to the relative list
-					detector dsecondop = findDetector(secondop);
-					if(dsecondop.scanned == 0)
-					{
-						relatives.push_back(secondop);
-						if(VERB > 3  || kid.name.find(catch_v) != string::npos)
-						{
-							for(unsigned int ir=0; ir<relatives.size()-1; ir++) cout << "\t";
-							cout << hd_msg << kid.name << " is the result of an operation. "
-							<< " Must build: " << secondop << " first " << endl;
-						}
-					}
-					detector dfirstop = findDetector(firstop);
-					if(dfirstop.scanned == 0)
-					{
-						relatives.push_back(firstop);
-						if(VERB > 3  || kid.name.find(catch_v) != string::npos)
-						{
-							for(unsigned int ir=0; ir<relatives.size()-1; ir++) cout << "\t";
-							cout << hd_msg << kid.name << " is the result of an operation. "
-							<< " Must build: " << firstop << " first " << endl;
-						}
-					}
-					// otherwise can build the kid
-					else if(dsecondop.scanned == 1 && dfirstop.scanned == 1)
-					{
-						buildDetector(kid.name);
-						kid.scanned = 1;
-					}
-				}
-				// no dependencies found, build the kid
-				else
-				{
-					buildDetector(kid.name);
-					kid.scanned = 1;
-				}
-			}
-			
-			// if the kid still doesn't exists and its mom doesn't exist.
-			// adding mom to the relatives list
-			if(kid.scanned == 0 && mom.scanned == 0)
-			{
-				relatives.push_back(kid.mother);
-			}
-			
-			// the kid has been built. Can go down one step in geneaology
-			if(kid.scanned == 1 && relatives.size())
-			{
-				if(VERB > 3 || kid.name.find(catch_v) != string::npos)
-					cout << hd_msg  << " " <<  kid.name << " is built." <<  endl << endl;
-				
-				relatives.pop_back();
-			}
-		}
-	}
 
 
 	// build mirrors
@@ -447,8 +240,11 @@ void MDetectorConstruction::isSensitive(detector detect)
 	string catch_v = gemcOpt.optMap["CATCH"].args;
 	
 	string sensi   = detect.sensitivity;
-	
-	if(sensi != "no" && sensi.find("mirror:") == string::npos)
+
+	// mirrors are recorded as flux
+	if(sensi.find("mirror:") != string::npos) sensi = "flux";
+
+	if(sensi != "no" )
 	{
 		G4SDManager* SDman = G4SDManager::GetSDMpointer();
 		if (!SDman) throw "Can't get G4SDManager";
@@ -480,6 +276,57 @@ void MDetectorConstruction::isSensitive(detector detect)
 	}
 }
 
+void MDetectorConstruction::buildCADDetector(string dname, string filename, int VERB)
+{
+	// filename has been already verified to exist?
+	if(VERB > 1)
+		cout << "  > Parsing CAD volume from " << filename << endl;
+
+	CADMesh * mesh = new CADMesh((char *) filename.c_str());
+	mesh->SetScale(mm);
+	mesh->SetReverse(false);
+
+	// solid
+	G4VSolid *cad_solid = mesh->TessellatedMesh();
+
+	// material
+	string materialName = trimSpacesFromString((*hallMap)[dname].material);
+
+	if(mats->find(materialName) == mats->end() ) {
+		G4NistManager* matman = G4NistManager::Instance();
+		if(matman->FindOrBuildMaterial(materialName)) (*mats)[materialName] = matman->FindOrBuildMaterial(materialName);
+	}
+
+	// logical
+	G4LogicalVolume *cad_logical = new G4LogicalVolume(cad_solid, (*mats)[materialName],dname, 0, 0, 0);
+	cad_logical->SetVisAttributes((*hallMap)[dname].VAtts);
+
+	// assigning the logical volume to the detector
+	(*hallMap)[dname].SetLogical(cad_logical);
+	isSensitive((*hallMap)[dname]);  // if sensitive, associate sensitive detector
+
+
+	string mom = (*hallMap)[dname].mother;
+	if(hallMap->find(mom) == hallMap->end()) {
+		cout << " Error: mom " << mom << " not found for " << dname << endl;
+		exit(0);
+	}
+
+	detector thisMom =  (*hallMap)[mom];
+
+
+	// has to be in the same scope, otherwise parser loses all the pointers
+	(*hallMap)[dname].SetPhysical(new G4PVPlacement(&(*hallMap)[dname].rot,
+														  (*hallMap)[dname].pos,
+														  cad_logical,
+														  dname.c_str(),
+														  thisMom.GetLogical(),
+														  false,
+														  0)
+										);
+	(*hallMap)[dname].scanned = 1;
+
+}
 
 void MDetectorConstruction::hasMagfield(detector detect)
 {
@@ -752,14 +599,14 @@ void MDetectorConstruction::buildMirrors()
 					mirrorSurfaces.back()->SetSigmaAlpha(sigmaAlpha);
 				}
 
-				if(borderv=="SkinSurface")
-				{
+				// documentation on sigma alhpa:
+				// http://geant4.slac.stanford.edu/UsersWorkshop/PDF/Peter/OpticalPhoton.pdf
+				// http://hypernews.slac.stanford.edu/HyperNews/geant4/get/opticalphotons/397.html
+
+				if(borderv=="SkinSurface") {
 					mirrorLSkinSurf.push_back(new G4LogicalSkinSurface(name,
 											  (*hallMap)[name].GetLogical(), mirrorSurfaces.back()));
-				}
-				else
-				{
-					
+				} else {
 					mirrorLBorderSurf.push_back(new G4LogicalBorderSurface(name,
 																		   (*hallMap)[name].GetPhysical(),
 																		   (*hallMap)[borderv].GetPhysical(), mirrorSurfaces.back()));
@@ -848,9 +695,312 @@ void MDetectorConstruction::assignRegions(vector<string> volumes)
 
 
 
+void MDetectorConstruction::scanDetectors(int VERB, string catch_v)
+{
+	string hd_msg = "  Native Scanning: ";
+	vector<string> relatives;
+
+	for( map<string, detector>::iterator i =  hallMap->begin(); i!=hallMap->end(); i++)
+	{
+		// don't build anything if the exist flag is not set
+		if(i->second.exist == 0 || i->second.scanned == 1 || i->second.factory != "TEXT") continue;
+
+		// put the volume in relatives to fill it
+		// if everything is good, it will be built right away
+		if(i->first != "root") relatives.push_back(i->second.name);
+
+		while(relatives.size() > 0)
+		{
+			detector kid = findDetector(relatives.back());
+			detector mom = findDetector(kid.mother);
+			// cout << " ASD " << kid.name << " " << kid.mother <<  " " << kid.scanned << " " << mom.scanned << " " << mom.factory << endl;
+
+			// production cut affects all volumes in a system rather than just the sensitive volumes
+			// if the mother system is different than the kid system
+			// then the kid will define a new region
+			if(mom.system != kid.system && kid.material != "Component")
+				regions.push_back(kid.name);
+
+
+			// Mom doesn't exists in the hallMap. Stopping everything.
+			if(mom.name != "akasha"  && mom.name == "notfound")
+			{
+				cout << hd_msg << "  Mom was not found for <" << relatives.back() << ">. "
+				<< " We have a No Child Left Behind policy. Exiting. " << endl << endl;
+				exit(0);
+			}
+
+			// output the Geneaology
+			if(VERB > 3 || kid.name.find(catch_v) != string::npos)
+			{
+				for(unsigned int ir=0; ir<relatives.size()-1; ir++) cout << "\t";
+				cout << hd_msg << " Checking " << kid.name << ", child of " << mom.name
+				<< ", for a living ancestor. "
+				<< " This Geneaology Depth is " << relatives.size() << "." << endl;
+			}
+
+			// Mom is built, kid not built yet.
+			if(kid.scanned == 0 && mom.scanned == 1) {
+				if(VERB > 3 || kid.name.find(catch_v) != string::npos)
+				{
+					for(unsigned int ir=0; ir<relatives.size()-1; ir++) cout << "\t";
+					cout << hd_msg << "  Found:  " << kid.name
+					<< " is not built yet but its mommie " << mom.name << " is."
+					<< " Building " << kid.name << " of type: "  << kid.type << "..." << endl;
+				}
+
+				// Check kid dependency on copies
+				if(kid.type.find("CopyOf") == 0)
+				{
+
+					stringstream ops;
+					string operands(kid.type, 6, kid.type.size());
+					ops << operands;
+					string original;
+					ops >> original;
+
+					detector dorig = findDetector(original);
+					// if dependency is not built yet, then
+					// add it to the relative list
+					if(dorig.scanned == 0)
+					{
+						if(dorig.factory == "TEXT") {
+							relatives.push_back(original);
+						} else {
+							// skipping this until later
+							cadRelativesOfNative.push_back(original);
+							remainingNative.push_back(kid.name);
+							relatives.pop_back();
+						}
+						if(VERB > 3  || kid.name.find(catch_v) != string::npos)
+						{
+							for(unsigned int ir=0; ir<relatives.size()-1; ir++) cout << "\t";
+							cout << hd_msg << kid.name << " is copied volume. "
+							<< " Must build: " << original << " first " << endl;
+						}
+					}
+					// otherwise can build the kid
+					else
+					{
+						buildDetector(kid.name);
+						kid.scanned = 1;
+					}
+				} else if(kid.type.find("ReplicaOf:") == 0) // Check kid dependency on replicas
+				{
+					stringstream ops;
+					string operands(kid.type, 10, kid.type.size());
+					ops << operands;
+					string original;
+					ops >> original;
+
+					detector dorig = findDetector(original);
+					// if dependency is not built yet, then
+					// add it to the relative list
+					if(dorig.scanned == 0)
+					{
+						relatives.push_back(trimSpacesFromString(original));
+
+						if(VERB > 3  || kid.name.find(catch_v) != string::npos)
+						{
+							for(unsigned int ir=0; ir<relatives.size()-1; ir++) cout << "\t";
+							cout << hd_msg << kid.name << " is a replica volume of  " << original
+							<< ". Must build: " << original << " first " << endl;
+						}
+					}
+					// otherwise can build the kid
+					else
+					{
+						buildDetector(kid.name);
+						kid.scanned = 1;
+					}
+				} else if(kid.type.find("Operation:") == 0)  // Check kid dependency on operations
+				{
+					int sstart = 10;
+					if(kid.type.find("Operation:~") == 0 || kid.type.find("Operation:@") == 0 ) sstart = 11;
+
+					string operation(kid.type, sstart, kid.type.size());
+					vector<string> operands = getStringVectorFromString(replaceCharInStringWithChars(operation, "-+*/", " "));
+					string firstop  = operands[0];
+					string secondop = operands[1];
+
+					// if dependency is not built yet, then
+					// add it to the relative list
+					detector dsecondop = findDetector(secondop);
+					if(dsecondop.scanned == 0)
+					{
+						relatives.push_back(secondop);
+						if(VERB > 3  || kid.name.find(catch_v) != string::npos)
+						{
+							for(unsigned int ir=0; ir<relatives.size()-1; ir++) cout << "\t";
+							cout << hd_msg << kid.name << " is the result of an operation. "
+							<< " Must build: " << secondop << " first " << endl;
+						}
+					}
+					detector dfirstop = findDetector(firstop);
+					if(dfirstop.scanned == 0)
+					{
+						relatives.push_back(firstop);
+						if(VERB > 3  || kid.name.find(catch_v) != string::npos)
+						{
+							for(unsigned int ir=0; ir<relatives.size()-1; ir++) cout << "\t";
+							cout << hd_msg << kid.name << " is the result of an operation. "
+							<< " Must build: " << firstop << " first " << endl;
+						}
+					}
+					// otherwise can build the kid
+					else if(dsecondop.scanned == 1 && dfirstop.scanned == 1)
+					{
+						buildDetector(kid.name);
+						kid.scanned = 1;
+					}
+				}
+				// no dependencies found, build the kid
+				else {
+					buildDetector(kid.name);
+					kid.scanned = 1;
+				}
+			}
+
+			// if the kid still doesn't exists and its mom doesn't exist.
+			// adding mom to the relatives list
+			else if(kid.scanned == 0 && mom.scanned == 0)
+			{
+				if(mom.factory == "TEXT") {
+					// we can still build this unless the mother is inside remainingNative
+					if(find(remainingNative.begin(), remainingNative.end(), kid.mother) == remainingNative.end()) {
+						relatives.push_back(kid.mother);
+					} else {
+						relatives.pop_back();
+						remainingNative.push_back(kid.name);
+					}
+				} else {
+					// need to build this later, popping this from the local list
+					cadRelativesOfNative.push_back(kid.mother);
+					remainingNative.push_back(kid.name);
+					relatives.pop_back();
+
+				}
+			}
+
+			// the kid has been built. Can go down one step in geneaology
+			if(kid.scanned == 1) {
+				if(VERB > 3 || kid.name.find(catch_v) != string::npos)
+					cout << hd_msg  << " " <<  kid.name << " is built." <<  endl << endl;
+
+				if(relatives.size()) {
+					relatives.pop_back();
+				}
+
+				// if this volume was a parent of a CAD volume, removing it from the list
+				auto nativeRelativesOfCadIT = find(nativeRelativesOfCad.begin(), nativeRelativesOfCad.end(), kid.name);
+				while(nativeRelativesOfCadIT != nativeRelativesOfCad.end()) {
+					nativeRelativesOfCad.erase(nativeRelativesOfCadIT);
+					nativeRelativesOfCadIT = find(nativeRelativesOfCad.begin(), nativeRelativesOfCad.end(), kid.name);
+				}
+
+				// if this volume was on hold but now it is build, removing it from the remainingNative
+				auto remainingNativeIT = find(remainingNative.begin(), remainingNative.end(), kid.name);
+				while(remainingNativeIT != remainingNative.end()) {
+					remainingNative.erase(remainingNativeIT);
+					remainingNativeIT = find(remainingNative.begin(), remainingNative.end(), kid.name);
+				}
+
+			}
+
+
+		}
+	}
+}
 
 
 
 
+void MDetectorConstruction::scanCadDetectors(int VERB, string catch_v)
+{
+	string hd_msg = "  CAD Scanning: ";
+	vector<string> relatives;
+	// building these first in case we want to make copies of these
+	for(auto &dd : *hallMap) {
+
+		// don't build anything if the exist flag is not set
+		if(dd.second.exist == 0 || dd.second.scanned == 1 || dd.second.factory != "CAD" || dd.first == "root" ) continue;
+
+
+		string thisDetName = dd.first;
+
+
+		// put the volume in relatives to fill it
+		// if everything is good, it will be built right away
+		if(thisDetName != "root") relatives.push_back(dd.second.name);
+
+		while(relatives.size() > 0)
+		{
+			detector kid = findDetector(relatives.back());
+			detector mom = findDetector(kid.mother);
+			// cout << " ASD " << kid.name << " " << kid.mother <<  " " << kid.scanned << " " << mom.scanned << " " << mom.factory << endl;
+
+			// Mom doesn't exists in the hallMap. Stopping everything.
+			if(mom.name != "akasha"  && mom.name == "notfound") {
+				cout << hd_msg << "  Mom was not found for <" << relatives.back() << ">. "
+				<< " We have a No Child Left Behind policy. Exiting. " << endl << endl;
+				exit(0);
+			}
+
+			// Mom is built, kid not built yet. Build kid
+			if(kid.scanned == 0 && mom.scanned == 1) {
+				string filename = dd.second.variation;
+				buildCADDetector(thisDetName, filename, VERB);
+				kid.scanned = 1;
+
+			} else if(kid.scanned == 0 && mom.scanned == 0 ) {
+				if(mom.factory == "CAD") {
+					// we can still build this unless the mother is inside remainingCad
+					if(find(remainingCad.begin(), remainingCad.end(), kid.mother) == remainingCad.end()) {
+						relatives.push_back(kid.mother);
+					} else {
+						relatives.pop_back();
+						remainingCad.push_back(kid.name);
+				}
+
+				} else {
+					// need to build this later, popping this from the local list
+					nativeRelativesOfCad.push_back(kid.mother);
+					remainingCad.push_back(kid.name);
+					relatives.pop_back();
+				}
+				// the kid has been built. Can go down one step in geneaology
+			} else if(kid.scanned == 1 && relatives.size()) {
+
+				if(VERB > 3 || kid.name.find(catch_v) != string::npos)
+					cout << hd_msg  << " " <<  kid.name << " is built." <<  endl << endl;
+
+				if(relatives.back() == kid.name) {
+					relatives.pop_back();
+				}
+
+
+				// if this volume was a parent of a native volume, removing it from the list
+				auto cadRelativesOfNativeIT = find(cadRelativesOfNative.begin(), cadRelativesOfNative.end(), kid.name);
+				while(cadRelativesOfNativeIT != cadRelativesOfNative.end()) {
+					cadRelativesOfNative.erase(cadRelativesOfNativeIT);
+					cadRelativesOfNativeIT = find(cadRelativesOfNative.begin(), cadRelativesOfNative.end(), kid.name);
+				}
+
+				// if this volume was on hold but now it is build, removing it from the remainingCad
+				auto remainingCadIT = find(remainingCad.begin(), remainingCad.end(), kid.name);
+				while(remainingCadIT != remainingCad.end()) {
+					remainingCad.erase(remainingCadIT);
+					remainingCadIT = find(remainingCad.begin(), remainingCad.end(), kid.name);
+				}
+
+			}
+		}
+	}
+	
+	
+	
+	
+	
+}
 
 
