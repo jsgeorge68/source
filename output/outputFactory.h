@@ -72,6 +72,7 @@ private:
 	// index 2: charge at electronics
 	// index 3: time at electronics
 	// index 4: vector of identifiers - have to match the translation table
+	// index 5: hardware - it's a vector[3] with crate/slot/channel
 	map< int, vector <double> >  chargeTime;
 
 public:
@@ -237,6 +238,9 @@ public:
 	// write RF Signal
 	virtual void writeRFSignal(outputContainer*, FrequencySyncSignal, gBank)  = 0;
 
+	// write user infos header
+	virtual void writeUserInfoseHeader(outputContainer*, map<string, double>)  = 0;
+
 	// write generated particles
 	virtual void writeGenerated(outputContainer*, vector<generatedParticle>, map<string, gBank> *banksMap, vector<userInforForParticle> userInfo) = 0;
 
@@ -253,10 +257,15 @@ public:
 	virtual void writeChargeTime(outputContainer*, vector<hitOutput>, string, map<string, gBank>*) = 0;
 
 	// write fadc mode 1 (full signal shape) - jlab hybrid banks. This uses the translation table to write the crate/slot/channel
-	virtual void writeFADCMode1(outputContainer*, vector<hitOutput>) = 0;
+	virtual void writeFADCMode1(outputContainer*, vector<hitOutput>, int) = 0;
 
+        // write fadc mode 1 (full signal shape) - jlab hybrid banks. This uses the translation table to write the crate/slot/channel
+        // This method should be called once at the end of event action, and the 1st argument 
+        // is a map<int crate_id, vector<hitoutput> (vector of all hits from that crate) >
+	virtual void writeFADCMode1( map<int, vector<hitOutput> >, int)  = 0;
+        
 	// write fadc mode 7 (integrated mode) - jlab hybrid banks. This uses the translation table to write the crate/slot/channel
-	virtual void writeFADCMode7(outputContainer*, vector<hitOutput>) = 0;
+	virtual void writeFADCMode7(outputContainer*, vector<hitOutput>, int) = 0;
 
 	// write event and close stream if necessary
 	virtual void writeEvent(outputContainer*) = 0;

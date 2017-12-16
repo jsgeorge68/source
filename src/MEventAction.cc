@@ -171,11 +171,12 @@ void MEventAction::EndOfEventAction(const G4Event* evt)
 			
 			for(int h=0; h<nhits; h++)
 			{
-				vector<int>           tids = (*MHC)[h]->GetTIds();
+				vector<int> tids = (*MHC)[h]->GetTIds();
 				
-				for(unsigned int t=0; t<tids.size(); t++)
+				for(unsigned int t=0; t<tids.size(); t++) {
+					if((*MHC)[h]->isBackgroundHit == 0)
 					track_db.insert(tids[t]);
-				
+				}
 				
 				if(SAVE_ALL_MOTHERS>1)
 				{
@@ -198,7 +199,7 @@ void MEventAction::EndOfEventAction(const G4Event* evt)
 	// this won't get the mother particle infos except for their track ID
 	map<int, TInfos> tinfos;
 	set<int>::iterator it;
-	
+
 	// the container is full only if /tracking/storeTrajectory 2
 	G4TrajectoryContainer *trajectoryContainer;
 	
@@ -237,7 +238,7 @@ void MEventAction::EndOfEventAction(const G4Event* evt)
 				}
 			}
 		}
-		
+
 		// building the hierarchy map
 		// for all secondary tracks
 		for(map<int, int>::iterator itm = momDaughter.begin(); itm != momDaughter.end(); itm++)
@@ -270,7 +271,7 @@ void MEventAction::EndOfEventAction(const G4Event* evt)
 			}
 		}
 
-		// removing daughter tracks if mother also gave hits
+	// removing daughter tracks if mother also gave hits
 		if(SAVE_ALL_MOTHERS>2)
 		{
 			vector<int> bgtIDs;
@@ -328,16 +329,25 @@ void MEventAction::EndOfEventAction(const G4Event* evt)
 	header["evn_type"] = -1;  // physics event. Negative is MonteCarlo event
 	header["beamPol"]  = gen_action->getBeamPol();
 
-	// user header should be in a different tag than the normal header
-	// for now, we're ok
-	for(unsigned i=0; i<gen_action->headerUserDefined.size(); i++)
-	{
-		string tmp = "user var " + stringify((int) i+1);
-		header[tmp] = gen_action->headerUserDefined[i];
-	}
-	
 	// write event header bank
 	processOutputFactory->writeHeader(outContainer, header, getBankFromMap("header", banksMap));
+
+	// user header should be in a different tag than the normal header
+	// for now, we're ok
+	// assuming 100 user vars max
+	map<string, double> userHeader;
+	for(unsigned i=0; i<gen_action->headerUserDefined.size(); i++) {
+		string tmp = "userVar" ;
+		if(i<9)        tmp +="00";
+		else if (i<99) tmp +="0";
+
+		tmp += to_string(i+1);
+
+		userHeader[tmp] = gen_action->headerUserDefined[i];
+	}
+
+	// write event header bank
+	processOutputFactory->writeUserInfoseHeader(outContainer, userHeader);
 
 	// write RF bank if present
 	// do not write in FASTMC mode
@@ -385,6 +395,11 @@ void MEventAction::EndOfEventAction(const G4Event* evt)
 	if(SAVE_ALL_MOTHERS>1)
 		saveBGPartsToLund();
 	
+        
+        
+        map<int, vector<hitOutput> > hit_outputs_from_AllSD;
+       
+        
 	for(map<string, sensitiveDetector*>::iterator it = SeDe_Map.begin(); it!= SeDe_Map.end(); it++)
 	{
 		MHC = it->second->GetMHitCollection();
@@ -397,12 +412,10 @@ void MEventAction::EndOfEventAction(const G4Event* evt)
 		// Instantiating the ProcessHitRoutine only once for the first hit.
 		if(nhits)
 		{
-			// the bank idtag is the one that corresponds to the hitType
+			//  the bank idtag is the one that corresponds to the hitType
 			//MHit* aHit = (*MHC)[0];
 			string vname = (*MHC)[0]->GetDetector().name;
 			string hitType = it->second->GetDetectorHitType(vname);
-
-			if(hitType.find("mirror:") != string::npos) hitType = "mirror";
 
 			HitProcess *hitProcessRoutine = getHitProcess(hitProcessMap, hitType, vname);
 			if(!hitProcessRoutine)
@@ -428,6 +441,8 @@ void MEventAction::EndOfEventAction(const G4Event* evt)
 			for(int h=0; h<nhits; h++)
 			{
 				MHit* aHit = (*MHC)[h];
+
+				// electronic noise hits disable? Why? TODO
 				if(aHit->isElectronicNoise)
 					continue;
 
@@ -560,9 +575,15 @@ void MEventAction::EndOfEventAction(const G4Event* evt)
 					hitOutput thisHitOutput;
 					MHit* aHit = (*MHC)[h];
 					
+					// calling integrateDgt will also set writeHit
 					thisHitOutput.setDgtz(hitProcessRoutine->integrateDgt(aHit, h+1));
-					allDgtOutput.push_back(thisHitOutput);
-					
+                    
+                    // include this hit. Users can set writeHit to false to avoid writing the hit
+                    // the hitProcessRoutine variable detectorThreshold could be used in integrateDgt
+                    if(hitProcessRoutine->writeHit) {
+                        allDgtOutput.push_back(thisHitOutput);
+                    }
+                    
 					string vname = aHit->GetId()[aHit->GetId().size()-1].name;
 					if(VERB > 4 || vname.find(catch_v) != string::npos)
 					{
@@ -577,14 +598,15 @@ void MEventAction::EndOfEventAction(const G4Event* evt)
 				
 			} // end of geant4 integrated digitized information
 			
-			
+
 			// geant4 voltage versus time
 			// by default they are all DISABLED
 			// user can enable them one by one
 			// using the SIGNALVT option
 			if(SIGNALVT.find(hitType) != string::npos) {
 				vector<hitOutput> allVTOutput;
-
+				
+				
 				for(int h=0; h<nhits; h++) {
 
 					hitOutput thisHitOutput;
@@ -594,16 +616,20 @@ void MEventAction::EndOfEventAction(const G4Event* evt)
 					// process each step to produce a charge/time digitized information / step
 					thisHitOutput.setChargeTime(hitProcessRoutine->chargeTime(aHit, h));
 
-					vector<double> stepTimes   = thisHitOutput.getChargeTime()[3];
-					vector<double> stepCharges = thisHitOutput.getChargeTime()[2];
-					vector<double> hardware    = thisHitOutput.getChargeTime()[5];
+					vector<double> stepTimes   = thisHitOutput.getChargeTime()[3]; // time at electronics
+					vector<double> stepCharges = thisHitOutput.getChargeTime()[2]; // charge at electronics
+					vector<double> hardware    = thisHitOutput.getChargeTime()[5]; // crate/slot/channel
 
 					map<int, int> vSignal;
 
 					// crate, slot, channels as from translation table
-					vSignal[0] = hardware[0];
-					vSignal[1] = hardware[1];
-					vSignal[2] = hardware[2];
+					vSignal[0] = hardware[0];           // crate
+					vSignal[1] = hardware[1];           // slot
+					vSignal[2] = hardware[2];           // channel
+
+					// Add comments what are these
+					double pedestal_mean = hardware[3];
+					double pedestal_sigm = hardware[4];
 
 					for(unsigned ts = 0; ts<nsamplings; ts++) {
 						double forTime = ts*tsampling;
@@ -615,18 +641,31 @@ void MEventAction::EndOfEventAction(const G4Event* evt)
 
 							double stepTime   = stepTimes[s];
 							double stepCharge = stepCharges[s];
+							
+							// cout<<"StepTime = "<<stepTime<<endl;
+							// cout<<"StepCharge =  = "<<stepCharge<<endl;
 
 							voltage += hitProcessRoutine->voltage(stepCharge, stepTime, forTime);
-
+							
+							//cout<<"setpCharge = "<<stepCharge<<endl;
+							
 							// cout << " hit " << h <<    "step " << s << "  time: " << stepTime
 							// << "   charge " << stepCharge << "  voltage " << voltage << "  for time bunch " << ts << endl;
 						}
+
+
+						// Now pedestal should be calculated, Assume it is a Gaussian 
+						double pedestal = G4RandGauss::shoot(pedestal_mean, pedestal_sigm);
+						
 						// need conversion factor from double to int
 						// the first 3 entries are crate/slot/channels above
-						vSignal[ts+3] = (int) voltage;
+						// the total signal is the pedestal + voltage (from actuall hit), here voltage is actually represents
+						// FADC counts
+						vSignal[ts+3] = int(pedestal) + (int) voltage;
 					}
 					thisHitOutput.createQuantumS(vSignal);
 					
+                                        hit_outputs_from_AllSD[vSignal[0]].push_back(thisHitOutput);
 					allVTOutput.push_back(thisHitOutput);
 					
 					// this is not written out yet
@@ -643,12 +682,18 @@ void MEventAction::EndOfEventAction(const G4Event* evt)
 					}
 				}
 				processOutputFactory->writeChargeTime(outContainer, allVTOutput, hitType, banksMap);
-				processOutputFactory->writeFADCMode1(outContainer, allVTOutput);
+				
+				// Event number (evtN) is needed in FADCMode1, therefore this is also passed as an argument
+				//processOutputFactory->writeFADCMode1(outContainer, allVTOutput, evtN);
+                                
 			}
 
 			delete hitProcessRoutine;
 		}
 	}
+        
+        processOutputFactory->writeFADCMode1( hit_outputs_from_AllSD, evtN);
+        
 	// writing out generated particle infos
 	processOutputFactory->writeGenerated(outContainer, MPrimaries, banksMap, gen_action->userInfo);
 	

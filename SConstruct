@@ -70,6 +70,7 @@ sensi_sources = Split("""
 	sensitivity/sensitiveDetector.cc
 	sensitivity/identifier.cc
 	sensitivity/Hit.cc
+	sensitivity/backgroundHits.cc
 	sensitivity/HitProcess.cc
 	sensitivity/sensitiveID.cc""")
 env.Library(source = sensi_sources, target = "lib/gsensitivity")
@@ -89,7 +90,7 @@ field_sources = Split("""
 	fields/fieldFactory.cc
 	fields/asciiField.cc
 	fields/mappedField.cc
-	fields/multipoleField.cc 
+	fields/multipoleField.cc
 	fields/symmetries/dipole.cc
 	fields/symmetries/cylindrical.cc
 	fields/symmetries/phi-segmented.cc""")
@@ -103,8 +104,9 @@ hitp_sources = Split("""
 	hitprocess/HitProcess_MapRegister.cc
 	hitprocess/flux_hitprocess.cc
 	hitprocess/counter_hitprocess.cc
+	hitprocess/clas12/micromegas/Lorentz.cc
 	hitprocess/clas12/micromegas/FMT_hitprocess.cc
-	hitprocess/clas12/micromegas/fmt_strip.cc	
+	hitprocess/clas12/micromegas/fmt_strip.cc
 	hitprocess/clas12/micromegas/BMT_hitprocess.cc
 	hitprocess/clas12/micromegas/bmt_strip.cc
 	hitprocess/clas12/micromegas/ftm_hitprocess.cc
@@ -131,7 +133,7 @@ hitp_sources = Split("""
 	hitprocess/eic/eic_dirc_hitprocess.cc
 	hitprocess/eic/eic_ec_hitprocess.cc
 	hitprocess/eic/eic_preshower_hitprocess.cc
-	hitprocess/eic/eic_rich_hitprocess.cc	
+	hitprocess/eic/eic_rich_hitprocess.cc
 	hitprocess/injector/bubble_hitprocess.cc
 	hitprocess/HPS/ECAL_hitprocess.cc
 	hitprocess/HPS/SVT_hitprocess.cc
@@ -145,6 +147,7 @@ output_sources = Split("""
 	output/outputFactory.cc
 	output/evio_output.cc
 	output/txt_output.cc
+	output/txt_simple_output.cc
 	output/gbank.cc""")
 env.Library(source = output_sources, target = "lib/goutput")
 
@@ -176,7 +179,6 @@ gemc_sources = Split("""
 	src/run_conditions.cc
 	src/gemc_options.cc
 	src/MDetectorConstruction.cc
-	src/MDetectorMessenger.cc
 	src/MEventAction.cc
 	src/MPrimaryGeneratorAction.cc
 	src/ActionInitialization.cc
@@ -193,10 +195,3 @@ if env['LIBRARY'] == "static":
 
 if env['LIBRARY'] == "shared":
 	env.SharedLibrary(source = gemc_sources, target = "gemc")
-
-
-
-
-
-
-

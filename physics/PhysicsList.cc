@@ -71,9 +71,14 @@ PhysicsList::PhysicsList(goptions opts) : G4VModularPhysicsList()
 		vector<string> emstripped = getStringVectorFromStringWithDelimiter(allEM[i], "_");
 		string stripped;
 
-		if(emstripped.size() == 2) stripped = trimSpacesFromString(emstripped[1]);
-		if(stripped != "")
-			g4EMList.push_back(stripped);
+		if(emstripped.size() == 2)
+			stripped = trimSpacesFromString(emstripped[1]);
+		else if (emstripped.size() == 1)
+			stripped = emstripped[0];
+		else
+			continue;
+
+		g4EMList.push_back(stripped);
 
 	}
 
@@ -371,7 +376,7 @@ void PhysicsList::ConstructProcess()
 		for(size_t i=0; i<g4HadronicPhysics.size(); i++)
 			g4HadronicPhysics[i]->ConstructProcess();
 
-		// auto theParticleIterator = GetParticleIterator();
+		 auto theParticleIterator = GetParticleIterator();
 
 		// PhysicsList contains theParticleIterator
 		theParticleIterator->reset();
@@ -405,13 +410,3 @@ void PhysicsList::ConstructProcess()
 		}
 	}
 }
-
-
-
-
-
-
-
-
-
-

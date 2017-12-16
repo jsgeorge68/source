@@ -51,65 +51,62 @@ using namespace CLHEP;
 /// The class parameters are filled from the field factory
 class gfield
 {
-	public:
-		gfield(){;}
-		gfield(goptions opts)
-		{
-			// initialize Magnetic Field Manager and Mapped field to NULL
-			MFM           = NULL;
-			map           = NULL;
-			symmetry      = "na";
-			format        = "na";
-			dimensions    = "na";
-			scaleFactor	  = 1;
-			minStep       = 1*mm;
-			integration   = "G4ClassicalRK4";
-			verbosity     = opts.optMap["FIELD_VERBOSITY"].arg;
-		}
-	 ~gfield(){}
+public:
+	gfield(){;}
+	gfield(goptions opts) : symmetry("na"), format("na"), dimensions("na"), map(nullptr), MFM(nullptr)
+	{
+		// initialize Magnetic Field Manager and Mapped field to NULL
+		scaleFactor	     = 1;
+		minStep          = 1*mm;
+		integration      = "G4ClassicalRK4";
+		verbosity        = opts.optMap["FIELD_VERBOSITY"].arg;
+		g4fieldCacheSize = opts.optMap["G4FIELDCACHESIZE"].arg*mm;
+	}
+	~gfield(){}
 	
-	public:
-		string name;            ///< Field name - used as key in the map<string, gfield>
-		string symmetry;        ///< Field symmetry
-		string format;          ///< Field format (available: simple (for uniform) and map)
-		string factory;         ///< Field factory (format of magnetic field)
-		string description;     ///< Field Description
-		string dimensions;      ///< Field dimensions (with units), for non-mapped fields
-		string integration;     ///< Integration Method
-		double verbosity;       ///< Log verbosity
-		double minStep;         ///< Minimum Step for the G4ChordFinder
-		string unit;            ///< Field Unit
+public:
+	string name;            ///< Field name - used as key in the map<string, gfield>
+	string symmetry;        ///< Field symmetry
+	string format;          ///< Field format (available: simple (for uniform) and map)
+	string factory;         ///< Field factory (format of magnetic field)
+	string description;     ///< Field Description
+	string dimensions;      ///< Field dimensions (with units), for non-mapped fields
+	string integration;     ///< Integration Method
+	double verbosity;       ///< Log verbosity
+	double minStep;         ///< Minimum Step for the G4ChordFinder
+	string unit;            ///< Field Unit
+	double g4fieldCacheSize;
 	
-		// Scale factor, integration methods and map interpolations are set from options
-		double scaleFactor;     
-		void initialize(goptions);
+	// Scale factor, integration methods and map interpolations are set from options
+	double scaleFactor;
+	void initialize(goptions);
 	
-		// creates simple magnetic field manager (uniform fields, etc)
-		void create_simple_MFM();
-		void create_simple_multipole_MFM();
+	// creates simple magnetic field manager (uniform fields, etc)
+	void create_simple_MFM();
+	void create_simple_multipole_MFM();
 	
-		// mapped Field. We need to factory to load the map
-		gMappedField *map;       ///< Mapped Field
-		fieldFactory *fFactory;  ///< fieldFactory that created the field
+	// mapped Field. We need to factory to load the map
+	gMappedField *map;       ///< Mapped Field
+	fieldFactory *fFactory;  ///< fieldFactory that created the field
 	
-	private:
-		G4FieldManager *MFM;             	///< G4 Magnetic Field Manager
-		void create_MFM();                ///< Creates the G4 Magnetic Field Manager
+private:
+	G4FieldManager *MFM;             	///< G4 Magnetic Field Manager
+	void create_MFM();                ///< Creates the G4 Magnetic Field Manager
 	
-	public:
-		// Returns Magnetic Field Manager Pointer
-		// creates one if it doesn't exist
-		G4FieldManager* get_MFM()
-		{
-			if(MFM == NULL)
-				create_MFM();
-				
-			return MFM;
-		} 	
-
-		///< Overloaded "<<" for gfield class. Dumps infos on screen.
-		friend ostream &operator<<(ostream &stream, gfield gf);
-				
+public:
+	// Returns Magnetic Field Manager Pointer
+	// creates one if it doesn't exist
+	G4FieldManager* get_MFM()
+	{
+		if(MFM == NULL)
+			create_MFM();
+		
+		return MFM;
+	}
+	
+	///< Overloaded "<<" for gfield class. Dumps infos on screen.
+	friend ostream &operator<<(ostream &stream, gfield gf);
+	
 };
 
 

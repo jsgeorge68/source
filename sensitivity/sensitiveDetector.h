@@ -16,6 +16,7 @@
 #include "detector.h"
 #include "Hit.h"
 #include "HitProcess.h"
+#include "backgroundHits.h"
 
 // C++ headers
 #include <iostream>
@@ -50,6 +51,9 @@ public:
 	goptions    gemcOpt;   ///< gemc option class
 	sensitiveID SDID;      ///< sensitiveID used for identification, hit properties and digitization
 
+
+	
+
 private:
 	MHitCollection *hitCollection;                               ///< G4THitsCollection<MHit>
 	HitProcess     *ProcessHitRoutine;                           ///< To call PID
@@ -65,12 +69,22 @@ private:
 	string ELECTRONICNOISE;  ///< List of detectors for which electronic noise routines will be called
 	int fastMCMode;          ///< In fast MC mode, the particle smeared/unsmeared momenta are saved
 
+	// background hits, key is event number
+	map<int, vector<BackgroundHit*> > *backgroundHits;
+
+	// bookkeeping of background events
+	int backgroundEventNumber;
+	vector<BackgroundHit*> currentBackground;
+	vector<BackgroundHit*> getNextBackgroundEvent();
+
+
 public:
 	vector<identifier> GetDetectorIdentifier(string name) {return (*hallMap)[name].identity;} ///< returns detector identity
 	string GetDetectorHitType(string name)                {return (*hallMap)[name].hitType;}  ///< returns detector hitType
 	MHitCollection* GetMHitCollection()                   {if(hitCollection) return hitCollection; else return NULL;}              ///< returns hit collection
 	MHit* find_existing_hit(vector<identifier>);                                               ///< returns hit collection hit inside identifer
 
+	void setBackgroundHits(map<int, vector<BackgroundHit*> > *bgh) {backgroundHits = bgh;}
 
 	int processID(string procName);   // return an ID from a process name.
 };

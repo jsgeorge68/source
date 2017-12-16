@@ -8,6 +8,8 @@
 map<string, double> IC_HitProcess :: integrateDgt(MHit* aHit, int hitn)
 {
 	map<string, double> dgtz;
+	if(aHit->isBackgroundHit == 1) return dgtz;
+
 	vector<identifier> identity = aHit->GetId();
 	
 	
@@ -78,6 +80,14 @@ map<string, double> IC_HitProcess :: integrateDgt(MHit* aHit, int hitn)
 	dgtz["ADC"]  = ADC;
 	dgtz["TDC"]  = TDC;
 	
+	// decide if write an hit or not
+	writeHit = true;
+	// define conditions to reject hit
+	bool rejectHitConditions = false;
+	if(rejectHitConditions) {
+		writeHit = false;
+	}
+
 	return dgtz;
 }
 

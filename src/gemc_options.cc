@@ -96,6 +96,15 @@ void goptions::setGoptions()
 	optMap["MERGE_LUND_BG"].type = 1;
 	optMap["MERGE_LUND_BG"].ctgr = "generator";
 	
+	optMap["MERGE_BGHITS"].args = "no";
+	optMap["MERGE_BGHITS"].help = "ASCII file to merge background hits\n";
+	optMap["MERGE_BGHITS"].help += "      example: -MERGE_BGHITS=\"background.dat\" \n";
+	optMap["MERGE_BGHITS"].name = "ASCII file to merge background hits";
+	optMap["MERGE_BGHITS"].type = 1;
+	optMap["MERGE_BGHITS"].ctgr = "generator";
+	
+
+	
 	optMap["NGENP"].arg  = 10;
 	optMap["NGENP"].help = "Max Number of Generated Particles to save in the Output.";
 	optMap["NGENP"].name = "Max Number of Generated Particles to save in the Output";
@@ -211,6 +220,15 @@ void goptions::setGoptions()
     optMap["SKIPNGEN"].name = "Skip N events";
     optMap["SKIPNGEN"].type = 0;
     optMap["SKIPNGEN"].ctgr = "generator";
+	
+	// disabled by default
+    optMap["PROPAGATE_DVERTEXTIME"].arg  = 0;
+    optMap["PROPAGATE_DVERTEXTIME"].help = "Calculate propogation time of detached vertex events and fire them at this later time. \n";
+	optMap["PROPAGATE_DVERTEXTIME"].help += "         0: Off (default)\n";
+	optMap["PROPAGATE_DVERTEXTIME"].help += "         1: On\n";								  
+    optMap["PROPAGATE_DVERTEXTIME"].name = "Calculate Propogation Time";
+    optMap["PROPAGATE_DVERTEXTIME"].type = 0;
+    optMap["PROPAGATE_DVERTEXTIME"].ctgr = "generator";
 
 	
 	// MySQL Database
@@ -610,7 +628,7 @@ void goptions::setGoptions()
 	optMap["FASTMCMODE"].type  = 0;
 	optMap["FASTMCMODE"].ctgr  = "output";
 
-	optMap["HALL_MATERIAL"].args = "Vacuum";
+	optMap["HALL_MATERIAL"].args = "G4_AIR";
 	optMap["HALL_MATERIAL"].help = "Composition of the Experimental Hall. \n";
 	optMap["HALL_MATERIAL"].help += "            Air normal simulation\n";
 	optMap["HALL_MATERIAL"].help += "            Air_Opt Simulation with Optical Physics\n";
@@ -664,6 +682,13 @@ void goptions::setGoptions()
 	optMap["NO_FIELD"].type = 1;
 	optMap["NO_FIELD"].ctgr = "physics";
 	optMap["NO_FIELD"].repe  = 0;
+
+	optMap["G4FIELDCACHESIZE"].args = 3;
+	optMap["G4FIELDCACHESIZE"].help = "Sets Geant4 Magnetic Field Cache Size (in mm) \n";
+	optMap["G4FIELDCACHESIZE"].name = "Sets Geant4 Magnetic Field Cache Size (in mm). ";
+	optMap["G4FIELDCACHESIZE"].type = 1;
+	optMap["G4FIELDCACHESIZE"].ctgr = "physics";
+	optMap["G4FIELDCACHESIZE"].repe  = 0;
 
 	optMap["PHYS_VERBOSITY"].arg = 0;
 	optMap["PHYS_VERBOSITY"].help = "Physics List Verbosity";

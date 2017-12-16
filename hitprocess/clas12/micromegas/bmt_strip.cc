@@ -23,22 +23,24 @@ vector<double> bmt_strip::FindStrip(int layer, int sector, G4ThreeVector xyz, do
 	double x = xyz.x()/mm;
 	double y = xyz.y()/mm;
 	double z = xyz.z()/mm;
-		
-	int Nel = (int) (1e6*Edep/bmtc.w_i); // the number of electrons produced
 
+	int Nel = (int) (1e6*Edep/bmtc.w_i);
 	// the return vector is always in pairs the first index is the strip number, the second is the Edep on the strip
+	if (bmtc.HV_DRIFT[layer-1][sector-1]==0||bmtc.HV_STRIPS[layer-1][sector-1]==0) Nel=0;
 	vector<double> strip_id;
 
 	double Delta_drift = sqrt(x*x+y*y) - bmtc.RADIUS[layer-1];
 
-	double phi = atan2(y,x) - Delta_drift*tan(bmtc.ThetaL)/bmtc.RADIUS[layer-1]; // Already apply the Lorentz Angle to find the ClosestStrip
+	double phi = atan2(y,x) + Delta_drift*tan(bmtc.ThetaL)*cos(bmtc.Theta_Ls_Z)/bmtc.RADIUS[layer-1]; // Already apply the Lorentz Angle to find the ClosestStrip
+	z=z + Delta_drift * tan(bmtc.ThetaL) * cos(bmtc.Theta_Ls_C); //Not sure useful, but take into account LorentzAngle deviation if
 	int sector_bis=isInSector(layer,atan2(y,x),bmtc);
 	int strip_num = getClosestStrip(layer, sector_bis, phi, z, bmtc);
 	sigma = getSigma(layer, x, y, bmtc);
 	sigma_phi = sigma/bmtc.RADIUS[layer-1];
 	int cluster_size=0;
-	if (bmtc.AXIS[layer-1]==0) cluster_size=bmtc.nb_sigma*sigma/bmtc.PITCH[layer-1][5]; //Compare to smallest pitch in C
-	if (bmtc.AXIS[layer-1]==1) cluster_size=bmtc.nb_sigma*sigma_phi/bmtc.PITCH[layer-1][0];
+	if (bmtc.AXIS[layer-1]==0) cluster_size=bmtc.nb_sigma*sigma/bmtc.PITCH[layer-1][5]+1; //Compare to smallest pitch in C
+	if (bmtc.AXIS[layer-1]==1) cluster_size=bmtc.nb_sigma*sigma_phi/bmtc.PITCH[layer-1][0]+1;
+
 	double weight=0;
 	if (strip_num>=1&&strip_num<=bmtc.NSTRIPS[layer-1]) weight=Weight_td(layer, sector_bis, strip_num, phi, z, bmtc);
 
@@ -46,6 +48,7 @@ vector<double> bmt_strip::FindStrip(int layer, int sector, G4ThreeVector xyz, do
 	  {
 	    strip_id.push_back(strip_num);
 	    strip_id.push_back(weight);
+	   
 	    // if the strip is found (i.e. the hit is within acceptance
 	    for(int istrip=1;istrip< cluster_size+1;istrip++)
 	      {
@@ -55,6 +58,7 @@ vector<double> bmt_strip::FindStrip(int layer, int sector, G4ThreeVector xyz, do
 		  if (weight>0){
 		    strip_id.push_back(strip_num+istrip);
 		    strip_id.push_back(weight);
+		    
 		  }
 		}
 		//Check the strip before the closest strip
@@ -63,7 +67,7 @@ vector<double> bmt_strip::FindStrip(int layer, int sector, G4ThreeVector xyz, do
 		  if (weight>0){
 		    strip_id.push_back(strip_num-istrip);
 		    strip_id.push_back(weight);
-		  }
+		   }
 		}
 		
 	      }
@@ -110,7 +114,7 @@ vector<double> bmt_strip::FindStrip(int layer, int sector, G4ThreeVector xyz, do
 double bmt_strip::getSigma(int layer, double x, double y,  bmtConstants bmtc)
 { // sigma for Z-detectors
 
-	double sigma = bmtc.SigmaDrift*sqrt((sqrt(x*x+y*y) - bmtc.RADIUS[layer-1])/bmtc.hDrift/cos(bmtc.ThetaL));
+	double sigma = bmtc.SigmaDrift*(sqrt(x*x+y*y) - bmtc.RADIUS[layer-1])/cos(bmtc.ThetaL);
 
 	return sigma;
 
@@ -269,6 +273,8 @@ double bmt_strip::GetBinomial(double n, double p){
   }
   return answer;
 }
+
+
 
 
 

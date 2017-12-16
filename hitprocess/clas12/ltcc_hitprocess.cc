@@ -19,6 +19,9 @@ static ltccConstants initializeLTCCConstants(int runno)
 	// all these constants should be read from CCDB
 	ltccConstants ltccc;
 
+	// do not initialize at the beginning, only after the end of the first event,
+	// with the proper run number coming from options or run table
+	if(runno == -1) return ltccc;
 
 	// database
 	ltccc.runNo = runno;
@@ -57,7 +60,9 @@ static ltccConstants initializeLTCCConstants(int runno)
 map<string, double> ltcc_HitProcess :: integrateDgt(MHit* aHit, int hitn)
 {
 	map<string, double> dgtz;
-	
+	if(aHit->isBackgroundHit == 1) return dgtz;
+
+
 	// we want to crash if identity doesn't have size 3
 	vector<identifier> identity = aHit->GetId();
 	int idsector  = identity[0].id;
@@ -74,6 +79,7 @@ map<string, double> ltcc_HitProcess :: integrateDgt(MHit* aHit, int hitn)
 	dgtz["sector"]  = -idsector;
 	dgtz["side"]    = -idside;
 	dgtz["segment"] = -idsegment;
+	dgtz["adc"]     = 0;
 	dgtz["nphe"]    = thisPid;
 	dgtz["npheD"]   = 0;
 	dgtz["time"]    = tInfos.time;
@@ -154,9 +160,15 @@ map<string, double> ltcc_HitProcess :: integrateDgt(MHit* aHit, int hitn)
 	dgtz["npheD"]   = ndetected;
 	dgtz["hitn"]    = hitn;
 
-	
-	return dgtz;
+	// decide if write an hit or not
+	writeHit = true;
+	// define conditions to reject hit
+	bool rejectHitConditions = false;
+	if(rejectHitConditions) {
+		writeHit = false;
+	}
 
+	return dgtz;
 }
 
 

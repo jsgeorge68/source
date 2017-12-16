@@ -44,17 +44,14 @@ map<string, gBank> read_banks(goptions gemcOpt, map<string, string> allSystems)
 	abank.load_variable("evn",        3, "Ni", "Event Number");
 	abank.load_variable("evn_type",   4, "Ni", "Event Type. 1 for physics events, 10 for scaler. Negative sign for MC.");
 	abank.load_variable("beamPol",    5, "Nd", "Beam Polarization");
-	abank.load_variable("var1",       6, "Nd", "User defined. In LUND this was: Target Polarization");
-	abank.load_variable("var2",       7, "Nd", "User defined. In LUND this was: Number of nucleons in the target");
-	abank.load_variable("var3",       8, "Nd", "User defined. In LUND this was: Number of protons in the target");
-	abank.load_variable("var4",       9, "Nd", "User defined. In LUND this was: Bjorken x");
-	abank.load_variable("var5",      10, "Nd", "User defined. In LUND this was: Fraction of energy loss");
-	abank.load_variable("var6",      11, "Nd", "User defined. In LUND this was: W square");
-	abank.load_variable("var7",      12, "Nd", "User defined. In LUND this was: Q square");
-	abank.load_variable("var8",      13, "Nd", "User defined. In LUND this was: Energy loss");
 	abank.orderNames();
 	banks["header"] = abank;
-	
+
+	// event header
+	abank = gBank(USER_HEADER_BANK_TAG, "userHeader", "User Header Bank");
+	abank.orderNames();
+	banks["userHeader"] = abank;
+
 	// generated particle infos
 	abank =  gBank(GENERATED_PARTICLES_BANK_TAG, "generated", "Generated Particles");
 	abank.load_variable("pid",           1,  "Ni", "Particle ID");
@@ -395,7 +392,7 @@ void gBank::load_variable(string n, int i, string t, string d)
 {
 	// adding the variable index to order the map
 	name.push_back(n);
-	id.push_back(i);
+	gid.push_back(i);
 	type.push_back(t);
 	description.push_back(d);
 }
@@ -405,7 +402,7 @@ int gBank::getVarId(string bank)
 {
 	for(unsigned int i=0; i<name.size(); i++)
 	{
-		if(name[i].find(bank) == 0) return id[i];
+		if(name[i].find(bank) == 0) return gid[i];
 	}
 	return -1;
 }
@@ -447,18 +444,18 @@ void gBank::orderNames()
 	int maxId = 0;
 	
 	// first find min, max ID
-	for(unsigned i=0; i<id.size(); i++)
+	for(unsigned i=0; i<gid.size(); i++)
 	{
-		if(id[i] < minId) minId = id[i];
-		if(id[i] > maxId) maxId = id[i];
+		if(gid[i] < minId) minId = gid[i];
+		if(gid[i] > maxId) maxId = gid[i];
 	}
 	
 	int j = 0;
 	for(int i=minId; i<=maxId; i++)
 	{
-		for(unsigned k=0; k<id.size(); k++)
+		for(unsigned k=0; k<gid.size(); k++)
 		{
-			if(i == id[k])
+			if(i == gid[k])
 			{
 				orderedNames[j++] = name[k];
 			}
@@ -500,7 +497,7 @@ gBank getDgtBankFromMap(string name, map<string, gBank>* banksMap)
 		{
 			if(thisBank.getVarBankType(thisBank.name[i]) == DGTINT_ID)
 			{
-				dgtBank.load_variable(thisBank.name[i], thisBank.id[i], thisBank.type[i], thisBank.description[i]);
+				dgtBank.load_variable(thisBank.name[i], thisBank.gid[i], thisBank.type[i], thisBank.description[i]);
 			}
 		}
 		
@@ -517,7 +514,7 @@ ostream &operator<<(ostream &stream, gBank bank)
 	
 	for(unsigned i = 0; i<bank.name.size(); i++)
 	{
-		cout << "  > Variable : " << bank.name[i] << "\t id: " << bank.id[i] << "\t type: " << bank.type[i] << " : " << bank.description[i] << endl;
+		cout << "  > Variable : " << bank.name[i] << "\t id: " << bank.gid[i] << "\t type: " << bank.type[i] << " : " << bank.description[i] << endl;
 	}
 	cout << endl;
 	return stream;

@@ -37,6 +37,10 @@ sensitiveDetector::sensitiveDetector(G4String name, goptions opt, string factory
 		RECORD_PASSBY = 1;
 		
 	SDID = sensitiveID(HCname, gemcOpt, factory, variation, system);
+
+	// background hits
+	backgroundHits = nullptr;
+	backgroundEventNumber = 0;
 }
 
 sensitiveDetector::~sensitiveDetector(){}
@@ -51,8 +55,40 @@ void sensitiveDetector::Initialize(G4HCofThisEvent* HCE)
 	ProcessHitRoutine = NULL;
 	if(verbosity > 1)
 		cout << "   > " << collectionName[0] << " initialized." << endl;
+
+
+	// checking the whole hit map
+	if(verbosity > 4) {
+		if(backgroundHits != nullptr) {
+			for(auto bgHits: (*backgroundHits)) {
+				cout << " >>> Background hits for " << HCname << " event number: " << bgHits.first << endl;
+				for(auto bgh: bgHits.second) {
+					cout << *bgh << endl;
+				}
+			}
+		}
+	}
+
+	// current background event bookkeeping
+	currentBackground.clear();
+	currentBackground = getNextBackgroundEvent();
 }
 
+vector<BackgroundHit*> sensitiveDetector::getNextBackgroundEvent()
+{
+
+	backgroundEventNumber++;
+
+	if(backgroundEventNumber == backgroundHits->size()) {
+		backgroundEventNumber = 1;
+	}
+
+	if(backgroundHits->find(backgroundEventNumber) != backgroundHits->end()) {
+		return (*backgroundHits)[backgroundEventNumber];
+	} else {
+		return {nullptr};
+	}
+}
 
 
 G4bool sensitiveDetector::ProcessHits(G4Step* aStep, G4TouchableHistory*)
@@ -73,6 +109,7 @@ G4bool sensitiveDetector::ProcessHits(G4Step* aStep, G4TouchableHistory*)
 	if(aStep->GetTrack()->GetDefinition() == G4OpticalPhoton::OpticalPhotonDefinition() && RECORD_MIRROR == 0) return false;
 	
 	G4Track *trk = aStep->GetTrack();
+	// this is expensive should we really check?
 	if(trk->GetDefinition()->GetParticleName().find("unknown") != string::npos) return false;
 	
 	G4StepPoint   *prestep     = aStep->GetPreStepPoint();
@@ -95,11 +132,11 @@ G4bool sensitiveDetector::ProcessHits(G4Step* aStep, G4TouchableHistory*)
 	int            tid     = trk->GetTrackID();                                               ///< Track ID
 	int            pid     = trk->GetDefinition()->GetPDGEncoding();                          ///< Track PID
 	int            q       = (int) trk->GetDefinition()->GetPDGCharge();                      ///< Track Charge
-	if(trk->GetCreatorProcess())
+	if(trk->GetCreatorProcess()) {
 		processName     = trk->GetCreatorProcess()->GetProcessName();                      ///< Process that originated the track
+	}
 	string materialName    = poststep->GetMaterial()->GetName();                              ///< Material name in this step
-	vector<identifier> VID = SetId(GetDetectorIdentifier(name), TH,
-								   ctime, SDID.timeWindow, tid);                              ///< Identifier at the geant4 level, using the G4 hierarchy to set the copies
+	vector<identifier> VID = SetId(GetDetectorIdentifier(name), TH, ctime, SDID.timeWindow, tid);                              ///< Identifier at the geant4 level, using the G4 hierarchy to set the copies
 	
 	// Get the ProcessHitRoutine to calculate the new vector<identifier>
 	if(ProcessHitRoutine == NULL)
@@ -295,6 +332,8 @@ void sensitiveDetector::EndOfEvent(G4HCofThisEvent *HCE)
 
 	// adding electronic noise to hits
 	// only if requested by user
+	// notice: there should be routine to decide if hit is in the same TW
+	// (in that case it is not a new hit)
 	if(ELECTRONICNOISE.find(HCname) != string::npos)
 	{
 		vector<MHit*> noiseHits = ProcessHitRoutine->electronicNoise();
@@ -302,8 +341,15 @@ void sensitiveDetector::EndOfEvent(G4HCofThisEvent *HCE)
 			hitCollection->insert(noiseHits[h]);
 	}
 
+	// adding background noise to hits
+	for(auto bgh: currentBackground) {
+		if(bgh != nullptr) {
+			hitCollection->insert(new MHit(bgh->energy, bgh->timeFromEventStart, bgh->nphe, bgh->identity));
+		}
+	}
+
+
 	if(ProcessHitRoutine) delete ProcessHitRoutine; // not needed anymore
-	
 }
 
 
@@ -331,7 +377,8 @@ int sensitiveDetector::processID(string procName)
 	if(procName == "positronNuclear")       return 9;
 	if(procName == "CoulombScat")           return 10;
 	if(procName == "Cerenkov")              return 11;
-	if(procName == "Scintillation")         return 12;
+	if(procName == "Scintillation")		return 12;
+	if(procName == "SynRad")           	return 13;
 	if(procName == "hadElastic")            return 20;
 	if(procName == "hBrems")                return 21;
 	if(procName == "hIoni")                 return 22;
@@ -360,6 +407,8 @@ int sensitiveDetector::processID(string procName)
 	if(procName == "ionIoni")               return 120;
 	if(procName == "ionInelastic")          return 121;
 	if(procName == "tInelastic")            return 130;
+	if(procName == "xi0Inelastic")          return 140;
+	if(procName == "omega-Inelastic")       return 150;
 
 	if(procName == "na")                    return 999;
 
